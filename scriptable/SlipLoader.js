@@ -13,7 +13,7 @@
  * ============================================================================
  */
 
-const GITHUB_RAW_URL = 
+const GITHUB_RAW_URL =
   "https://raw.githubusercontent.com/Teenoiii/slip-tracker/main/scriptable/SlipCore.js";
 const CACHE_FOLDER = "SlipTracker";
 const CACHE_FILE = "SlipCore.cache.js";
@@ -106,7 +106,7 @@ async function boot() {
 
   try {
     // รัน Core Engine ด้วย AsyncFunction พร้อมส่ง Context ของ Scriptable เข้าไปครบถ้วน
-    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
     const runner = new AsyncFunction(
       "LOADER_CONTEXT",
       `${coreCode}\n;if (typeof runSlipTracker === "function") { return await runSlipTracker(LOADER_CONTEXT); }`

@@ -96,7 +96,7 @@ const CATEGORY_RULES = [
   {
     id: "food",
     name: "อาหารและเครื่องดื่ม",
-    icon: "🍜",
+    icon: "",
     keywords: [
       "cafe",
       "coffee",
@@ -131,7 +131,7 @@ const CATEGORY_RULES = [
   {
     id: "shopping",
     name: "ช้อปปิ้งและของใช้",
-    icon: "🛍️",
+    icon: "",
     keywords: [
       "7-eleven",
       "7-11",
@@ -161,7 +161,7 @@ const CATEGORY_RULES = [
   {
     id: "transport",
     name: "เดินทางและยานพาหนะ",
-    icon: "🚕",
+    icon: "",
     keywords: [
       "grab",
       "bolt",
@@ -188,7 +188,7 @@ const CATEGORY_RULES = [
   {
     id: "bills",
     name: "บิลและสาธารณูปโภค",
-    icon: "⚡",
+    icon: "",
     keywords: [
       "การไฟฟ้า",
       "กฟน",
@@ -216,7 +216,7 @@ const CATEGORY_RULES = [
   {
     id: "entertainment",
     name: "บันเทิงและไลฟ์สไตล์",
-    icon: "🎬",
+    icon: "",
     keywords: [
       "netflix",
       "spotify",
@@ -669,7 +669,7 @@ function classifyCategory(merchant, rawText = "") {
   return {
     id: "general",
     name: "โอนเงิน / อื่นๆ",
-    icon: "💸"
+    icon: ""
   };
 }
 
@@ -865,7 +865,7 @@ class SlipDatabase {
         byCategoryMap[catId] = {
           id: catId,
           name: tx.categoryName || "อื่นๆ",
-          icon: tx.categoryIcon || "💸",
+          icon: tx.categoryIcon || "",
           total: 0,
           count: 0
         };
@@ -887,6 +887,29 @@ class SlipDatabase {
       categories,
       recentTransactions: monthlyTx.slice(0, 10)
     };
+  }
+
+  getDailyTotals(days = 7) {
+    const state = this.loadState();
+    const totals = {};
+    for (const tx of state.transactions) {
+      const key = String(tx.timestamp || "").substring(0, 10);
+      totals[key] = Number(((totals[key] || 0) + Number(tx.amount || 0)).toFixed(2));
+    }
+
+    const result = [];
+    const now = new Date();
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      result.push({
+        dateOnly: key,
+        weekday: d.getDay(),
+        isToday: offset === 0,
+        total: totals[key] || 0
+      });
+    }
+    return result;
   }
 
   updateBudget(newBudget) {
@@ -947,80 +970,155 @@ function createDefaultStorageAdapter() {
  */
 async function renderHomeWidget(db) {
   const summary = db.getMonthlySummary();
-  const widget = new ListWidget();
-  widget.setPadding(14, 16, 14, 16);
+  const daily = db.getDailyTotals(7);
+  const todayTotal = daily[daily.length - 1].total;
 
-  // พื้นหลังสีเข้มสไตล์ FinTech Modern
+  const widget = new ListWidget();
+  widget.setPadding(14, 16, 14, 14);
+
+  // Frosted Dark Obsidian background (slightly translucent to blend with wallpaper)
   const gradient = new LinearGradient();
-  gradient.locations = [0, 1];
-  gradient.colors = [new Color("#0f172a"), new Color("#1e1b4b")];
+  gradient.locations = [0, 0.55, 1];
+  gradient.colors = [
+    new Color("#1E2330", 0.95),
+    new Color("#141720", 0.97),
+    new Color("#0D0F14", 0.98)
+  ];
   widget.backgroundGradient = gradient;
 
-  // Header
-  const headerStack = widget.addStack();
-  headerStack.layoutHorizontally();
-  headerStack.centerAlignContent();
+  const root = widget.addStack();
+  root.layoutHorizontally();
 
-  const titleText = headerStack.addText("SLIPTRACKER OS");
-  titleText.font = Font.boldSystemFont(11);
-  titleText.textColor = new Color("#818cf8");
+  // ---------------- LEFT COLUMN: metrics & capsule ----------------
+  const left = root.addStack();
+  left.layoutVertically();
 
-  headerStack.addSpacer();
+  const label = left.addText("EXPENSE TRACKER");
+  label.font = Font.semiboldSystemFont(9);
+  label.textColor = new Color("#64748B");
 
-  const countText = headerStack.addText(`${summary.transactionCount} รายการ`);
-  countText.font = Font.mediumSystemFont(10);
-  countText.textColor = new Color("#94a3b8");
+  left.addSpacer(5);
 
-  widget.addSpacer(6);
+  const todayRow = left.addStack();
+  todayRow.layoutHorizontally();
+  todayRow.bottomAlignContent();
+  const baht = todayRow.addText("฿");
+  baht.font = Font.mediumRoundedSystemFont(14);
+  baht.textColor = new Color("#94A3B8");
+  todayRow.addSpacer(2);
+  const todayValue = todayRow.addText(formatMoney(todayTotal));
+  todayValue.font = Font.boldRoundedSystemFont(22);
+  todayValue.textColor = new Color("#F8FAFC");
+  todayValue.minimumScaleFactor = 0.6;
+  todayValue.lineLimit = 1;
 
-  // ยอดใช้จ่ายรวมเดือนนี้
-  const amountText = widget.addText(`฿${summary.totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })}`);
-  amountText.font = Font.boldRoundedSystemFont(24);
-  amountText.textColor = Color.white();
+  const todayCaption = left.addText("TODAY'S SPENT");
+  todayCaption.font = Font.semiboldSystemFont(8);
+  todayCaption.textColor = new Color("#475569");
 
-  widget.addSpacer(4);
+  left.addSpacer(7);
 
-  // งบคงเหลือ
-  const remainColor = summary.remaining >= 0 ? "#34d399" : "#f87171";
-  const remainLabel =
-    summary.remaining >= 0
-      ? `คงเหลือ ฿${summary.remaining.toLocaleString()} (${100 - summary.percentUsed}%)`
-      : `เกินงบ ฿${Math.abs(summary.remaining).toLocaleString()}`;
+  const monthRow = left.addStack();
+  monthRow.layoutHorizontally();
+  monthRow.centerAlignContent();
+  const monthLabel = monthRow.addText("MONTH  ");
+  monthLabel.font = Font.semiboldSystemFont(8);
+  monthLabel.textColor = new Color("#475569");
+  const monthValue = monthRow.addText(`฿${formatMoney(summary.totalSpent)}`);
+  monthValue.font = Font.semiboldRoundedSystemFont(12);
+  monthValue.textColor = new Color("#CBD5E1");
+  monthValue.lineLimit = 1;
+  monthValue.minimumScaleFactor = 0.7;
 
-  const subText = widget.addText(remainLabel);
-  subText.font = Font.mediumSystemFont(11);
-  subText.textColor = new Color(remainColor);
+  left.addSpacer();
 
-  widget.addSpacer(10);
+  const remainingRatio = summary.budget > 0 ? summary.remaining / summary.budget : 0;
+  const isLow = summary.remaining < 0 || remainingRatio <= 0.15;
+  const statusColor = new Color(isLow ? "#F87171" : "#38BDF8");
 
-  // รายการล่าสุด 2 รายการ
-  const recent = summary.recentTransactions.slice(0, 2);
-  if (recent.length === 0) {
-    const emptyText = widget.addText("ยังไม่มีรายการในเดือนนี้");
-    emptyText.font = Font.systemFont(11);
-    emptyText.textColor = new Color("#64748b");
-  } else {
-    for (const item of recent) {
-      const row = widget.addStack();
-      row.layoutHorizontally();
-      row.centerAlignContent();
+  const capsule = left.addStack();
+  capsule.layoutHorizontally();
+  capsule.centerAlignContent();
+  capsule.setPadding(5, 10, 5, 10);
+  capsule.cornerRadius = 12;
+  capsule.backgroundColor = new Color("#1E293B", 0.5);
 
-      const merch = row.addText(`${item.categoryIcon || "💸"} ${item.merchant}`);
-      merch.font = Font.systemFont(11);
-      merch.textColor = new Color("#e2e8f0");
-      merch.lineLimit = 1;
+  const dot = capsule.addText("\u25CF");
+  dot.font = Font.systemFont(7);
+  dot.textColor = statusColor;
+  capsule.addSpacer(5);
+  const remLabel = capsule.addText(summary.remaining < 0 ? "OVER  " : "REMAINING  ");
+  remLabel.font = Font.semiboldSystemFont(8);
+  remLabel.textColor = new Color("#64748B");
+  const remValue = capsule.addText(`฿${formatMoney(Math.abs(summary.remaining), true)}`);
+  remValue.font = Font.boldRoundedSystemFont(11);
+  remValue.textColor = statusColor;
+  remValue.lineLimit = 1;
+  remValue.minimumScaleFactor = 0.6;
 
-      row.addSpacer();
+  root.addSpacer(14);
 
-      const amt = row.addText(`-฿${item.amount.toLocaleString()}`);
-      amt.font = Font.semiboldSystemFont(11);
-      amt.textColor = new Color("#cbd5e1");
+  // ---------------- RIGHT COLUMN: 7-day velocity chart ----------------
+  const card = root.addStack();
+  card.layoutVertically();
+  card.setPadding(10, 12, 8, 12);
+  card.cornerRadius = 10;
+  card.backgroundColor = new Color("#10131B", 0.6);
 
-      widget.addSpacer(3);
+  const chartTitle = card.addText("7-DAY VELOCITY");
+  chartTitle.font = Font.semiboldSystemFont(8);
+  chartTitle.textColor = new Color("#64748B");
+
+  card.addSpacer(6);
+
+  const maxTotal = Math.max(...daily.map((d) => d.total), 0);
+  const chartHeight = 56;
+  const barsRow = card.addStack();
+  barsRow.layoutHorizontally();
+  barsRow.bottomAlignContent();
+
+  const dayNames = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+  daily.forEach((d, i) => {
+    const col = barsRow.addStack();
+    col.layoutVertically();
+    col.centerAlignContent();
+
+    const slot = col.addStack();
+    slot.size = new Size(14, chartHeight);
+    slot.layoutVertically();
+    slot.addSpacer();
+
+    const barHeight = d.total > 0 && maxTotal > 0 ? Math.max(4, Math.round((d.total / maxTotal) * chartHeight)) : 4;
+    const bar = slot.addStack();
+    bar.size = new Size(10, barHeight);
+    bar.cornerRadius = 3;
+    if (d.isToday) {
+      bar.backgroundColor = new Color("#38BDF8");
+    } else if (d.total > 0) {
+      bar.backgroundColor = new Color("#334155");
+    } else {
+      bar.backgroundColor = new Color("#1E2430");
     }
-  }
+
+    col.addSpacer(4);
+
+    const dayLabel = col.addText(d.isToday ? "TD" : dayNames[d.weekday]);
+    dayLabel.font = d.isToday ? Font.boldSystemFont(7) : Font.mediumSystemFont(7);
+    dayLabel.textColor = new Color(d.isToday ? "#38BDF8" : "#64748B");
+
+    if (i < daily.length - 1) barsRow.addSpacer(4);
+  });
 
   return widget;
+}
+
+function formatMoney(value, whole = false) {
+  const n = Number(value) || 0;
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2
+  });
 }
 
 async function presentInteractiveDashboard(db) {
@@ -1032,20 +1130,20 @@ async function presentInteractiveDashboard(db) {
   const headerRow = new UITableRow();
   headerRow.isHeader = true;
   headerRow.height = 75;
-  headerRow.backgroundColor = new Color("#0f172a");
+  headerRow.backgroundColor = new Color("#0F1219");
   const hCell = headerRow.addText(
-    `SlipTracker OS — ยอดเดือนนี้ ฿${summary.totalSpent.toLocaleString()}`,
-    `งบประมาณ ฿${summary.budget.toLocaleString()} • คงเหลือ ฿${summary.remaining.toLocaleString()} (${summary.transactionCount} รายการ)`
+    `EXPENSE TRACKER  |  ฿${formatMoney(summary.totalSpent)}`,
+    `Budget ฿${formatMoney(summary.budget, true)}  |  Remaining ฿${formatMoney(summary.remaining)}  |  ${summary.transactionCount} transactions`
   );
-  hCell.titleColor = Color.white();
-  hCell.subtitleColor = new Color("#94a3b8");
+  hCell.titleColor = new Color("#F8FAFC");
+  hCell.subtitleColor = new Color("#94A3B8");
   table.addRow(headerRow);
 
-  // ปุ่มตั้งค่างบประมาณ
+  // Budget settings row
   const actionRow = new UITableRow();
   actionRow.height = 48;
-  const actionCell = actionRow.addText("⚙️ ตั้งงบประมาณรายเดือน / ทดสอบสแกนสลิป", "แตะเพื่อจัดการตั้งค่า");
-  actionCell.titleColor = new Color("#6366f1");
+  const actionCell = actionRow.addText("ตั้งงบประมาณรายเดือน", "แตะเพื่อแก้ไขงบประมาณ");
+  actionCell.titleColor = new Color("#38BDF8");
   actionRow.onSelect = async () => {
     const prompt = new Alert();
     prompt.title = "ตั้งงบประมาณรายเดือน (บาท)";
@@ -1059,19 +1157,19 @@ async function presentInteractiveDashboard(db) {
   };
   table.addRow(actionRow);
 
-  // แสดงรายการล่าสุด
+  // Recent transactions
   for (const tx of summary.recentTransactions) {
     const row = new UITableRow();
     row.height = 58;
     const left = row.addText(
-      `${tx.categoryIcon} ${tx.merchant}`,
-      `${tx.bankName} • ${tx.dateOnly} ${tx.timeOnly} • Ref: ${String(tx.refId).substring(0, 10)}`
+      `${tx.merchant}`,
+      `${tx.categoryName}  |  ${tx.bankName}  |  ${tx.dateOnly} ${tx.timeOnly}  |  Ref ${String(tx.refId).substring(0, 10)}`
     );
     left.widthWeight = 70;
 
-    const right = row.addText(`฿${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`);
+    const right = row.addText(`฿${formatMoney(tx.amount)}`);
     right.rightAligned();
-    right.titleColor = new Color("#ef4444");
+    right.titleColor = new Color("#F87171");
     right.widthWeight = 30;
 
     table.addRow(row);
@@ -1100,7 +1198,7 @@ async function runSlipTracker(context = {}) {
 
     if (typeof Notification !== "undefined") {
       const notif = new Notification();
-      notif.title = result.ok ? "✅ บันทึกรายจ่ายสำเร็จ" : "⚠️ แจ้งเตือน SlipTracker";
+      notif.title = result.ok ? "บันทึกรายจ่ายสำเร็จ" : "แจ้งเตือน SlipTracker";
       notif.body = result.message;
       await notif.schedule();
     }

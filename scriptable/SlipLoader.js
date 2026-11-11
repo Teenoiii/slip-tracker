@@ -1,4 +1,4 @@
-// Variables used by Scriptable.
+﻿// Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-purple; icon-glyph: magic;
 
@@ -7,7 +7,7 @@
  * SLIPTRACKER — ONE-CLICK AUTO-UPDATE LOADER (iOS Scriptable)
  * ============================================================================
  * วิธีใช้งาน:
- * 1. คัดลอกโค้ดนี้ไปวางในแอป Scriptable แล้วตั้งชื่อสคริปต์ว่า "SlipTracker"
+ * 1. คัดลอกโค้ดนี้ไปวางในแอป Scriptable แล้วตั้งชื่อสคริปต์ว่า "SlipDashboard"
  * 2. ตัว Loader จะดึงเอนจินหลัก (SlipCore.js) เวอร์ชันล่าสุดจาก GitHub อัตโนมัติ
  * 3. เก็บ Cache ลงใน iCloud Drive เพื่อให้ทำงานแบบ Offline ได้ 100% แม้ไม่มีเน็ต
  * ============================================================================

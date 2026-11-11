@@ -1,0 +1,150 @@
+{
+  "bankSlips": [
+    {
+      "id": "kbank_coffee_2569",
+      "description": "สลิปธนาคารกสิกรไทย (K PLUS) ใช้ปี พ.ศ. ย่อ 2 หลัก (69) และมี EMVCo QR มาตรฐาน",
+      "ocrText": "โอนเงินสำเร็จ\n11 มี.ค. 69 14:25 น.\nจาก\nนาย ธีรภัทร รักดี\nxxx-x-x1234-x\nไปยัง\nบจก. คาเฟ่ อเมซอน\nxxx-x-x9876-x\nเลขที่รายการ: 010311142500998877\nจำนวนเงิน: 65.00 บาท\nค่าธรรมเนียม: 0.00 บาท",
+      "qrPayload": "0046000600000101030040220202603111425009988775102TH9104ABCD",
+      "expected": {
+        "bankCode": "KBANK",
+        "refId": "20260311142500998877",
+        "amount": 65.00,
+        "merchant": "คาเฟ่ อเมซอน",
+        "yearAD": 2026,
+        "monthIndex": 2,
+        "day": 11,
+        "categoryId": "food"
+      }
+    },
+    {
+      "id": "scb_7eleven_2569_full",
+      "description": "สลิปธนาคารไทยพาณิชย์ (SCB EASY) ใช้ปี พ.ศ. เต็ม 4 หลัก (2569) และยอดเงินมีจุลภาค",
+      "ocrText": "SCB โอนเงินสำเร็จ\n15 เม.ย. 2569 - 09:12\nจาก นาย กิตติพงศ์\nไปยัง บมจ. ซีพี ออลล์ (7-Eleven)\nจำนวนเงิน 1,245.50 บาท\nรหัสอ้างอิง 20260415SCB991122",
+      "qrPayload": "003900060000010103014021720260415SCB9911225102TH91041234",
+      "expected": {
+        "bankCode": "SCB",
+        "refId": "20260415SCB991122",
+        "amount": 1245.50,
+        "merchant": "ซีพี ออลล์ (7-Eleven)",
+        "yearAD": 2026,
+        "monthIndex": 3,
+        "day": 15,
+        "categoryId": "shopping"
+      }
+    },
+    {
+      "id": "ktb_person_transfer",
+      "description": "สลิปธนาคารกรุงไทย (Krungthai NEXT) โอนให้บุคคลธรรมดา มีคำนำหน้า นาย/นางสาว",
+      "ocrText": "Krungthai โอนเงินสำเร็จ\n02 พ.ย. 69 18:05 น.\nผู้โอน นาย วรพล\nผู้รับโอน\nนางสาว พิมพ์ชนก สุขใจ\nกรุงไทย xxx-x-xx554-x\nจำนวนเงิน 3,500.00 บาท\nค่าธรรมเนียม 0.00 บาท",
+      "qrPayload": "0043000600000101030060217KTB202611021805995102TH",
+      "expected": {
+        "bankCode": "KTB",
+        "refId": "KTB20261102180599",
+        "amount": 3500.00,
+        "merchant": "พิมพ์ชนก สุขใจ",
+        "yearAD": 2026,
+        "monthIndex": 10,
+        "day": 2,
+        "categoryId": "general"
+      }
+    },
+    {
+      "id": "bbl_ptt_fuel",
+      "description": "สลิปธนาคารกรุงเทพ (BBL) เติมน้ำมัน ปตท. วันที่รูปแบบตัวเลขคั่นด้วย /",
+      "ocrText": "ธนาคารกรุงเทพ\nรายการโอนเงินสำเร็จ\n20/08/2569 11:30\nไปยัง: บริษัท ปตท. น้ำมันและการค้าปลีก จำกัด\nยอดโอน 800.00 THB",
+      "qrPayload": "0042000600000101030020216BBL20260820113005102TH",
+      "expected": {
+        "bankCode": "BBL",
+        "refId": "BBL2026082011300",
+        "amount": 800.00,
+        "merchant": "ปตท. น้ำมันและการค้าปลีก",
+        "yearAD": 2026,
+        "monthIndex": 7,
+        "day": 20,
+        "categoryId": "transport"
+      }
+    },
+    {
+      "id": "ttb_mea_electric",
+      "description": "สลิปธนาคารทหารไทยธนชาต (ttb touch) จ่ายบิลการไฟฟ้านครหลวง",
+      "ocrText": "ttb touch\nจ่ายบิลสำเร็จ\n28 ธ.ค. 2569 20:15\nไปยัง การไฟฟ้านครหลวง (กฟน.)\nจำนวนเงิน 2,180.75 บาท",
+      "qrPayload": "0043000600000101030110217TTB202612282015885102TH",
+      "expected": {
+        "bankCode": "TTB",
+        "refId": "TTB20261228201588",
+        "amount": 2180.75,
+        "merchant": "การไฟฟ้านครหลวง (กฟน.)",
+        "yearAD": 2026,
+        "monthIndex": 11,
+        "day": 28,
+        "categoryId": "bills"
+      }
+    },
+    {
+      "id": "bay_shabu_slip",
+      "description": "สลิปธนาคารกรุงศรีอยุธยา (KMA) ทานชาบู",
+      "ocrText": "KMA กรุงศรี\nโอนเงินสำเร็จ\n05 ม.ค. 69 19:45\nไปยัง ร้าน สุกี้ตี๋น้อย สาขาลาดพร้าว\nยอดเงิน 598.00 บาท",
+      "qrPayload": "0043000600000101030250217BAY202601051945775102TH",
+      "expected": {
+        "bankCode": "BAY",
+        "refId": "BAY20260105194577",
+        "amount": 598.00,
+        "merchant": "สุกี้ตี๋น้อย สาขาลาดพร้าว",
+        "yearAD": 2026,
+        "monthIndex": 0,
+        "day": 5,
+        "categoryId": "food"
+      }
+    }
+  ],
+  "creditCardSMS": [
+    {
+      "id": "sms_ktc_starbucks",
+      "description": "SMS บัตรเครดิต KTC รูดซื้อกาแฟ Starbucks",
+      "ocrText": "บัตร KTC x1234 ใช้จ่าย 165.00 บาท ที่ STARBUCKS COFFEE เมื่อ 11/03/69 08:30 น. วงเงินคงเหลือ 45,000.00 บ.",
+      "qrPayload": "",
+      "expected": {
+        "bankCode": "KTC",
+        "channel": "CREDIT_SMS",
+        "amount": 165.00,
+        "merchant": "STARBUCKS COFFEE",
+        "yearAD": 2026,
+        "monthIndex": 2,
+        "day": 11,
+        "categoryId": "food"
+      }
+    },
+    {
+      "id": "sms_cardx_shopee",
+      "description": "SMS บัตรเครดิต CardX SCB ช้อปปิ้งออนไลน์ Shopee",
+      "ocrText": "CardX: บัตร xxxx9988 รูดซื้อ 1,490.00 บาท ที่ SHOPEE THAILAND วันที่ 19/05/2569 เวลา 22:10 น.",
+      "qrPayload": "",
+      "expected": {
+        "bankCode": "CardX",
+        "channel": "CREDIT_SMS",
+        "amount": 1490.00,
+        "merchant": "SHOPEE THAILAND",
+        "yearAD": 2026,
+        "monthIndex": 4,
+        "day": 19,
+        "categoryId": "shopping"
+      }
+    },
+    {
+      "id": "sms_kbank_cc_netflix",
+      "description": "SMS บัตรเครดิตกสิกรไทย หักค่าสมาชิกรายเดือน Netflix",
+      "ocrText": "บัตรกสิกรไทย x4567 ชำระ 419.00 บ. ที่ NETFLIX.COM เมื่อ 01/07/69 10:00 น.",
+      "qrPayload": "",
+      "expected": {
+        "bankCode": "KBANK-CC",
+        "channel": "CREDIT_SMS",
+        "amount": 419.00,
+        "merchant": "NETFLIX.COM",
+        "yearAD": 2026,
+        "monthIndex": 6,
+        "day": 1,
+        "categoryId": "entertainment"
+      }
+    }
+  ]
+}

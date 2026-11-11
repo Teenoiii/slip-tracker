@@ -968,148 +968,146 @@ function createDefaultStorageAdapter() {
  * 5. iOS HOME SCREEN WIDGET & INTERACTIVE DASHBOARD (Scriptable UI)
  * ============================================================================
  */
-async function renderHomeWidget(db) {
-  const summary = db.getMonthlySummary();
-  const daily = db.getDailyTotals(7);
-  const todayTotal = daily[daily.length - 1].total;
-
+function renderHomeWidget(records = [], budget = 15000) {
   const widget = new ListWidget();
-  widget.setPadding(14, 16, 14, 14);
+  widget.setPadding(14, 16, 14, 16);
+  widget.url = URLScheme.forRunningScript();
 
-  // Frosted Dark Obsidian background (slightly translucent to blend with wallpaper)
+  // 1. Frosted Translucent Glass Base (โปร่งแสงให้แสง Wallpaper ลอดผ่าน)
   const gradient = new LinearGradient();
-  gradient.locations = [0, 0.55, 1];
+  gradient.locations = [0.0, 1.0];
   gradient.colors = [
-    new Color("#1E2330", 0.95),
-    new Color("#141720", 0.97),
-    new Color("#0D0F14", 0.98)
+    new Color("#1E2433", 0.65), // สโมคกี้บลูโปร่งแสง
+    new Color("#0F131D", 0.80)  // เงาดำลึกด้านล่าง
   ];
   widget.backgroundGradient = gradient;
 
-  const root = widget.addStack();
-  root.layoutHorizontally();
+  const now = new Date();
+  const currentYMD = now.toISOString().substring(0, 10);
+  const currentMonth = currentYMD.substring(0, 7);
 
-  // ---------------- LEFT COLUMN: metrics & capsule ----------------
-  const left = root.addStack();
-  left.layoutVertically();
+  let todaySpent = 0;
+  let monthSpent = 0;
 
-  const label = left.addText("EXPENSE TRACKER");
-  label.font = Font.semiboldSystemFont(9);
-  label.textColor = new Color("#64748B");
+  // กรองรายการล่าสุด 2 รายการ
+  const sortedRecords = [...records].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const recentRecords = sortedRecords.slice(0, 2);
 
-  left.addSpacer(5);
-
-  const todayRow = left.addStack();
-  todayRow.layoutHorizontally();
-  todayRow.bottomAlignContent();
-  const baht = todayRow.addText("฿");
-  baht.font = Font.mediumRoundedSystemFont(14);
-  baht.textColor = new Color("#94A3B8");
-  todayRow.addSpacer(2);
-  const todayValue = todayRow.addText(formatMoney(todayTotal));
-  todayValue.font = Font.boldRoundedSystemFont(22);
-  todayValue.textColor = new Color("#F8FAFC");
-  todayValue.minimumScaleFactor = 0.6;
-  todayValue.lineLimit = 1;
-
-  const todayCaption = left.addText("TODAY'S SPENT");
-  todayCaption.font = Font.semiboldSystemFont(8);
-  todayCaption.textColor = new Color("#475569");
-
-  left.addSpacer(7);
-
-  const monthRow = left.addStack();
-  monthRow.layoutHorizontally();
-  monthRow.centerAlignContent();
-  const monthLabel = monthRow.addText("MONTH  ");
-  monthLabel.font = Font.semiboldSystemFont(8);
-  monthLabel.textColor = new Color("#475569");
-  const monthValue = monthRow.addText(`฿${formatMoney(summary.totalSpent)}`);
-  monthValue.font = Font.semiboldRoundedSystemFont(12);
-  monthValue.textColor = new Color("#CBD5E1");
-  monthValue.lineLimit = 1;
-  monthValue.minimumScaleFactor = 0.7;
-
-  left.addSpacer();
-
-  const remainingRatio = summary.budget > 0 ? summary.remaining / summary.budget : 0;
-  const isLow = summary.remaining < 0 || remainingRatio <= 0.15;
-  const statusColor = new Color(isLow ? "#F87171" : "#38BDF8");
-
-  const capsule = left.addStack();
-  capsule.layoutHorizontally();
-  capsule.centerAlignContent();
-  capsule.setPadding(5, 10, 5, 10);
-  capsule.cornerRadius = 12;
-  capsule.backgroundColor = new Color("#1E293B", 0.5);
-
-  const dot = capsule.addText("\u25CF");
-  dot.font = Font.systemFont(7);
-  dot.textColor = statusColor;
-  capsule.addSpacer(5);
-  const remLabel = capsule.addText(summary.remaining < 0 ? "OVER  " : "REMAINING  ");
-  remLabel.font = Font.semiboldSystemFont(8);
-  remLabel.textColor = new Color("#64748B");
-  const remValue = capsule.addText(`฿${formatMoney(Math.abs(summary.remaining), true)}`);
-  remValue.font = Font.boldRoundedSystemFont(11);
-  remValue.textColor = statusColor;
-  remValue.lineLimit = 1;
-  remValue.minimumScaleFactor = 0.6;
-
-  root.addSpacer(14);
-
-  // ---------------- RIGHT COLUMN: 7-day velocity chart ----------------
-  const card = root.addStack();
-  card.layoutVertically();
-  card.setPadding(10, 12, 8, 12);
-  card.cornerRadius = 10;
-  card.backgroundColor = new Color("#10131B", 0.6);
-
-  const chartTitle = card.addText("7-DAY VELOCITY");
-  chartTitle.font = Font.semiboldSystemFont(8);
-  chartTitle.textColor = new Color("#64748B");
-
-  card.addSpacer(6);
-
-  const maxTotal = Math.max(...daily.map((d) => d.total), 0);
-  const chartHeight = 56;
-  const barsRow = card.addStack();
-  barsRow.layoutHorizontally();
-  barsRow.bottomAlignContent();
-
-  const dayNames = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
-
-  daily.forEach((d, i) => {
-    const col = barsRow.addStack();
-    col.layoutVertically();
-    col.centerAlignContent();
-
-    const slot = col.addStack();
-    slot.size = new Size(14, chartHeight);
-    slot.layoutVertically();
-    slot.addSpacer();
-
-    const barHeight = d.total > 0 && maxTotal > 0 ? Math.max(4, Math.round((d.total / maxTotal) * chartHeight)) : 4;
-    const bar = slot.addStack();
-    bar.size = new Size(10, barHeight);
-    bar.cornerRadius = 3;
-    if (d.isToday) {
-      bar.backgroundColor = new Color("#38BDF8");
-    } else if (d.total > 0) {
-      bar.backgroundColor = new Color("#334155");
-    } else {
-      bar.backgroundColor = new Color("#1E2430");
-    }
-
-    col.addSpacer(4);
-
-    const dayLabel = col.addText(d.isToday ? "TD" : dayNames[d.weekday]);
-    dayLabel.font = d.isToday ? Font.boldSystemFont(7) : Font.mediumSystemFont(7);
-    dayLabel.textColor = new Color(d.isToday ? "#38BDF8" : "#64748B");
-
-    if (i < daily.length - 1) barsRow.addSpacer(4);
+  records.forEach(r => {
+    const dStr = (r.date || "").substring(0, 10);
+    const amt = Number(r.amount) || 0;
+    if (dStr === currentYMD) todaySpent += amt;
+    if (dStr.startsWith(currentMonth)) monthSpent += amt;
   });
 
+  const remaining = Math.max(0, budget - monthSpent);
+  const spentPercent = Math.min(Math.round((monthSpent / budget) * 100), 100);
+
+  // 2. Main Layout (Horizontal Split)
+  const root = widget.addStack();
+  root.layoutHorizontally();
+  root.centerAlignContent();
+
+  // LEFT COLUMN: Overview & Dynamic Glass Progress Bar
+  const leftCol = root.addStack();
+  leftCol.layoutVertically();
+  leftCol.size = new Size(155, 0);
+
+  // App Subtitle / Date
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const subText = leftCol.addText(dateStr.toUpperCase());
+  subText.font = Font.semiboldSystemFont(9);
+  subText.textColor = new Color("#94A3B8");
+  subText.textOpacity = 0.8;
+
+  leftCol.addSpacer(2);
+
+  // Today Amount (Hero)
+  const amtStack = leftCol.addStack();
+  amtStack.bottomAlignContent();
+  const currencySign = amtStack.addText("฿");
+  currencySign.font = Font.systemFont(13);
+  currencySign.textColor = new Color("#CBD5E1");
+  amtStack.addSpacer(2);
+
+  const heroVal = amtStack.addText(
+    todaySpent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+  heroVal.font = Font.boldSystemFont(22);
+  heroVal.textColor = Color.white();
+
+  leftCol.addSpacer(6);
+
+  // Minimalist Glass Progress Bar
+  const barContainer = leftCol.addStack();
+  barContainer.size = new Size(140, 4);
+  barContainer.cornerRadius = 2;
+  barContainer.backgroundColor = new Color("#FFFFFF", 0.12);
+
+  const activeBarWidth = Math.max(6, Math.round((140 * spentPercent) / 100));
+  const activeBar = barContainer.addStack();
+  activeBar.size = new Size(activeBarWidth, 4);
+  activeBar.cornerRadius = 2;
+  activeBar.backgroundColor = remaining > 1000 ? new Color("#38BDF8") : new Color("#F87171");
+
+  leftCol.addSpacer(5);
+
+  // Remaining Label
+  const remText = leftCol.addText(`LEFT ฿${Math.round(remaining).toLocaleString()} (${100 - spentPercent}%)`);
+  remText.font = Font.mediumSystemFont(8.5);
+  remText.textColor = new Color("#94A3B8");
+
+  root.addSpacer();
+
+  // RIGHT COLUMN: 2 Recent Glass Cards
+  const rightCol = root.addStack();
+  rightCol.layoutVertically();
+  rightCol.size = new Size(135, 0);
+
+  const rightTitle = rightCol.addText("RECENT ACTIVITY");
+  rightTitle.font = Font.semiboldSystemFont(8.5);
+  rightTitle.textColor = new Color("#64748B");
+
+  rightCol.addSpacer(4);
+
+  if (recentRecords.length === 0) {
+    const emptyCard = rightCol.addStack();
+    emptyCard.size = new Size(135, 52);
+    emptyCard.cornerRadius = 10;
+    emptyCard.backgroundColor = new Color("#FFFFFF", 0.05);
+    emptyCard.centerAlignContent();
+    const emptyText = emptyCard.addText("No records yet");
+    emptyText.font = Font.systemFont(9);
+    emptyText.textColor = new Color("#475569");
+  } else {
+    recentRecords.forEach((item, index) => {
+      const card = rightCol.addStack();
+      card.layoutHorizontally();
+      card.centerAlignContent();
+      card.size = new Size(135, 27);
+      card.cornerRadius = 8;
+      // Frosted Glass Effect with subtle border
+      card.backgroundColor = new Color("#FFFFFF", 0.06);
+      card.borderWidth = 0.5;
+      card.borderColor = new Color("#FFFFFF", 0.12);
+      card.setPadding(4, 8, 4, 8);
+
+      const merchText = card.addText(item.merchant || "Expense");
+      merchText.font = Font.mediumSystemFont(9.5);
+      merchText.textColor = new Color("#F1F5F9");
+      merchText.lineLimit = 1;
+
+      card.addSpacer();
+
+      const itemAmt = card.addText(`-฿${Number(item.amount).toLocaleString()}`);
+      itemAmt.font = Font.semiboldSystemFont(9.5);
+      itemAmt.textColor = new Color("#E2E8F0");
+
+      if (index === 0) rightCol.addSpacer(4);
+    });
+  }
+
+  widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
   return widget;
 }
 

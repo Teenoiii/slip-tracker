@@ -1,4 +1,4 @@
-﻿// Variables used by Scriptable.
+// Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-purple; icon-glyph: magic;
 
@@ -58,8 +58,10 @@ async function boot() {
   let coreCode = null;
   let updatedFromRemote = false;
 
-  // พยายามดึงเวอร์ชันล่าสุดจาก GitHub (Timeout 4 วินาที เพื่อไม่ให้ Shortcut ช้า)
-  if (forceUpdate || shouldCheckRemote(fm, metaPath)) {
+  const isWidget = typeof config !== "undefined" && config.runsInWidget;
+
+  // พยายามดึงเวอร์ชันล่าสุดจาก GitHub (ยกเว้นตอนรันใน Widget ที่มี cached code อยู่แล้ว เพื่อป้องกัน iOS Widget Timeout)
+  if ((forceUpdate || shouldCheckRemote(fm, metaPath)) && (!isWidget || !fm.fileExists(cachePath))) {
     try {
       const req = new Request(GITHUB_RAW_URL);
       req.timeoutInterval = 4;
@@ -91,7 +93,18 @@ async function boot() {
   if (!coreCode) {
     const errorMsg =
       "ไม่พบไฟล์ระบบ SlipCore ในเครื่อง และไม่สามารถเชื่อมต่ออินเทอร์เน็ตเพื่อดาวน์โหลดครั้งแรกได้ กรุณาต่ออินเทอร์เน็ตแล้วรันใหม่อีกครั้ง";
-    if (typeof config !== "undefined" && config.runsWithSiri) {
+    if (isWidget && typeof ListWidget !== "undefined") {
+      const errWidget = new ListWidget();
+      errWidget.backgroundColor = new Color("#0F131D");
+      const title = errWidget.addText("SlipDashboard");
+      title.font = Font.boldSystemFont(12);
+      title.textColor = new Color("#38BDF8");
+      errWidget.addSpacer(4);
+      const msg = errWidget.addText("แตะเพื่อเปิดแอปและดาวน์โหลดระบบครั้งแรก");
+      msg.font = Font.systemFont(11);
+      msg.textColor = new Color("#94A3B8");
+      Script.setWidget(errWidget);
+    } else if (typeof config !== "undefined" && config.runsWithSiri) {
       Script.setShortcutOutput({ ok: false, error: errorMsg });
     } else if (typeof Alert !== "undefined") {
       const alert = new Alert();
@@ -124,7 +137,18 @@ async function boot() {
     }
   } catch (execError) {
     console.error(`[SlipLoader] Execution Error: ${execError.message}`);
-    if (typeof Alert !== "undefined" && (!config || !config.runsInWidget)) {
+    if (isWidget && typeof ListWidget !== "undefined") {
+      const fallbackWidget = new ListWidget();
+      fallbackWidget.backgroundColor = new Color("#0F131D");
+      const errTitle = fallbackWidget.addText("Widget Error");
+      errTitle.font = Font.boldSystemFont(11);
+      errTitle.textColor = new Color("#F87171");
+      fallbackWidget.addSpacer(4);
+      const errBody = fallbackWidget.addText(String(execError.message || execError));
+      errBody.font = Font.systemFont(9);
+      errBody.textColor = new Color("#94A3B8");
+      Script.setWidget(fallbackWidget);
+    } else if (typeof Alert !== "undefined" && (!config || !config.runsInWidget)) {
       const errAlert = new Alert();
       errAlert.title = "เกิดข้อผิดพลาดในระบบ SlipTracker";
       errAlert.message = String(execError.stack || execError.message || execError);

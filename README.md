@@ -1,18 +1,28 @@
-# SlipTracker — iOS Serverless Expense OS 💸📱
+# SlipTracker — iOS Serverless Expense OS
 
-ระบบบันทึกรายจ่ายอัตโนมัติจาก **ภาพสลิปโอนเงินธนาคารไทย (Multi-Bank OCR + EMVCo QR)** และ **ข้อความ SMS บัตรเครดิต** สำหรับผู้ใช้ iOS ที่ทำงานผ่าน **Apple Shortcuts + Scriptable** แบบไร้เซิร์ฟเวอร์ (100% Serverless & Zero Infrastructure Cost)
+ระบบบันทึกรายจ่ายอัตโนมัติจาก **ภาพสลิปโอนเงินธนาคารไทย (Multi-Bank OCR + EMVCo QR)** และ **ข้อความ SMS บัตรเครดิต** สำหรับผู้ใช้ iOS ที่ทำงานผ่าน **Apple Shortcuts + Scriptable** แบบไร้เซิร์ฟเวอร์ (100% Serverless & Zero Infrastructure Cost) พร้อมดีไซน์ **Apple Liquid Glass Widget**
 
 ---
 
-## 🌟 ปรัชญาการออกแบบ (Core Philosophy)
+## ปรัชญาการออกแบบ (Core Philosophy)
 
 1. **Zero Infrastructure Cost (ฟรี 100% ถาวร):** ไม่มีค่าเช่า Database หรือ Cloud Server ทุกอย่างจัดเก็บเป็นไฟล์ JSON บน `FileManager.iCloud()` ในบัญชี iCloud ส่วนตัวของผู้ใช้แต่ละคน (ข้อมูล 10,000 รายการ ใช้พื้นที่ไม่ถึง 2MB)
 2. **100% Privacy & Zero Liability (ปลอดภัยตามมาตรฐาน PDPA):** ข้อมูลสลิปและยอดเงินไม่เคยถูกส่งออกไปยังเซิร์ฟเวอร์ภายนอก การแกะข้อความ (OCR) และการถอดรหัส QR Code ทำงานแบบ On-Device บน iPhone ทั้งหมด
-3. **One-Click Distribution & Auto-Update:** เพื่อนติดตั้งง่ายที่สุดเพียงก๊อปปี้โค้ด `SlipLoader.js` สั้นๆ ไปวางในแอป Scriptable ครั้งเดียว ระบบจะดึงสมองกลหลัก (`SlipCore.js`) เวอร์ชันล่าสุดจาก GitHub มาอัปเดตและทำ Offline Cache ให้อัตโนมัติ
+3. **One-Click Distribution & Auto-Update:** ติดตั้งง่ายเพียงคัดลอกโค้ด `SlipLoader.js` ไปวางในแอป Scriptable และตั้งชื่อสคริปต์ว่า **`SlipDashboard`** ครั้งเดียว ระบบจะดึงสมองกลหลัก (`SlipCore.js`) เวอร์ชันล่าสุดจาก GitHub (`Teenoiii/slip-tracker`) มาอัปเดตและทำ Offline Cache ให้อัตโนมัติ
 
 ---
 
-## 🧠 ความสามารถเฉพาะทาง (Domain Specifications)
+## ลิงก์ติดตั้งสำหรับ iPhone (iCloud Shortcuts & Scriptable)
+
+- **แอป Scriptable (App Store):** https://apps.apple.com/app/scriptable/id1405459188
+- **1. `ScanSlipToApp` (สแกนสลิปล่าสุดในอัลบั้ม):** https://www.icloud.com/shortcuts/ce111366e93a4cd48e1de3256ba3a02f
+- **2. `PickSlipToApp` (เลือกรูปสลิปเองจากอัลบั้ม):** https://www.icloud.com/shortcuts/809d3f56b36148dcba8fcaa39267b5f5
+- **3. `SlipRecord` (Automation เมื่อปิดแอปธนาคาร):** https://www.icloud.com/shortcuts/c29d2ed91fba4946b565a73e82690b50
+- **4. `SlipSMS` (Automation เมื่อได้รับ SMS บัตรเครดิต):** https://www.icloud.com/shortcuts/a93eac4838d94f3d82c6b44d2a3387cd
+
+---
+
+## ความสามารถเฉพาะทาง (Domain Specifications)
 
 ### 1. EMVCo QR Code Payload Parser (มาตรฐานสลิปธนาคารไทย)
 - สกัดรหัสธนาคารต้นทางจากซับแท็ก `0103` ตามด้วยรหัสธนาคาร 3 หลัก:
@@ -36,9 +46,13 @@
 - รองรับข้อความแจ้งเตือน SMS บัตรเครดิตชั้นนำ (`KTC`, `CardX`, `KBANK-CC`, `TTB`, `BAY`)
 - จัดหมวดหมู่รายจ่ายอัตโนมัติ (อาหารและเครื่องดื่ม, ช้อปปิ้ง, เดินทาง, บิลสาธารณูปโภค, บันเทิง)
 
+### 4. Apple Liquid Glass Home Screen Widget
+- ออกแบบสำหรับ iOS Medium Widget โทน Frosted Dark Obsidian (`#1E2330` → `#141720` → `#0D0F14`)
+- แบ่ง 2 คอลัมน์: ยอดใช้จ่ายวันนี้ (`TODAY'S SPENT`), ยอดสะสมรายเดือน, Capsule แสดงงบคงเหลือ (`REMAINING`), และกราฟแท่งเปรียบเทียบรายจ่าย 7 วันย้อนหลัง (`7-DAY VELOCITY`)
+
 ---
 
-## 📁 โครงสร้างโปรเจกต์ (Directory Structure)
+## โครงสร้างโปรเจกต์ (Directory Structure)
 
 ```text
 slip-tracker/
@@ -46,35 +60,32 @@ slip-tracker/
 ├── .gitignore
 ├── README.md
 ├── scriptable/
-│   ├── SlipLoader.js      # ตัวดึงโค้ดอัตโนมัติสำหรับเครื่องเพื่อน (Auto-Update + iCloud Cache)
-│   └── SlipCore.js        # เอนจินหลัก (EMVCo Parser + Date Healer + iCloud DB + iOS Widget + UI)
+│   ├── SlipLoader.js      # ตัวดึงโค้ดอัตโนมัติสำหรับสคริปต์ "SlipDashboard" (Auto-Update + iCloud Cache)
+│   └── SlipCore.js        # เอนจินหลัก (EMVCo Parser + Date Healer + iCloud DB + Liquid Glass Widget)
 ├── test/
 │   ├── sample_slips.json  # Mock Data สลิปธนาคารไทย 6 แห่ง และ SMS บัตรเครดิต
-│   └── test-parser.js     # Automated Unit Test รันผ่าน Node.js
-└── web/                   # Landing Page & Interactive Slip Simulator (Vite + React + Tailwind CSS)
+│   └── test-parser.js     # Automated Unit Test รันผ่าน Node.js (17 Assertions)
+└── web/                   # Web Portal, Setup Guide 4 ขั้นตอน & Live Sandbox (Vite + React + Tailwind CSS)
 ```
 
 ---
 
-## 🚀 วิธีรันและทดสอบระบบ (Quick Start)
+## วิธีรันและทดสอบระบบ (Quick Start)
 
 ### 1. รันชุดทดสอบ Unit Test (Node.js)
-ทดสอบความแม่นยำของ EMVCo QR Parser, Auto-Heal Date Engine, OCR สลิปทุกธนาคาร และระบบป้องกันสลิปซ้ำ:
-
 ```bash
 npm test
 ```
 
-### 2. รันหน้าเว็บ Landing Page & Interactive Simulator
-หน้าเว็บสำหรับแจกโค้ดให้เพื่อนทาง Instagram Bio พร้อมกล่องจำลองการแกะสลิปแบบเรียลไทม์:
-
+### 2. รันหน้าเว็บ Portal & Interactive Simulator (Local Dev)
 ```bash
 npm run web:install
 npm run web:dev
 ```
 
-หรือสั่ง Build สำหรับนำไป Deploy บน GitHub Pages / Vercel / Cloudflare Pages (ฟรี 100%):
-
-```bash
-npm run web:build
-```
+### 3. ตั้งค่า Deploy บน Cloudflare Pages
+เมื่อเชื่อมต่อ GitHub Repository (`Teenoiii/slip-tracker`) เข้ากับ Cloudflare Pages ให้ตั้งค่าดังนี้:
+- **Framework preset:** `Vite`
+- **Build command:** `npm run web:install && npm run web:build`
+- **Build output directory:** `web/dist`
+- **Environment variables:** `NODE_VERSION = 20`

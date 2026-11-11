@@ -920,6 +920,54 @@ class SlipDatabase {
     this.saveState(state);
     return true;
   }
+
+  async getAllRecords() {
+    const state = this.loadState();
+    return Array.isArray(state.transactions) ? state.transactions : [];
+  }
+
+  async getMonthlyBudget() {
+    const state = this.loadState();
+    return Number((state.settings && state.settings.monthlyBudget) || 15000);
+  }
+
+  addManualTransaction(amount, merchantName) {
+    const val = parseFloat(amount);
+    if (isNaN(val) || val <= 0) {
+      return {
+        ok: false,
+        status: "INVALID_AMOUNT",
+        message: "กรุณาระบุยอดเงินที่มากกว่า 0 บาท"
+      };
+    }
+
+    const cleanedMerchant = cleanMerchantName(merchantName || "รายการจดเอง");
+    const dateInfo = formatDateResult(new Date(), false);
+    const category = classifyCategory(cleanedMerchant, "");
+    const refId = computeTransactionHash("MANUAL", dateInfo.iso, val, cleanedMerchant);
+
+    const tx = {
+      id: refId,
+      refId,
+      hasVerifiedQR: false,
+      bankCode: "MANUAL",
+      bankName: "จดรายการเอง",
+      channel: "MANUAL",
+      amount: Number(val.toFixed(2)),
+      merchant: cleanedMerchant,
+      categoryId: category.id,
+      categoryName: category.name,
+      categoryIcon: category.icon,
+      timestamp: dateInfo.iso,
+      dateOnly: dateInfo.dateOnly,
+      timeOnly: dateInfo.timeOnly,
+      yearAD: dateInfo.yearAD,
+      monthIndex: dateInfo.monthIndex,
+      rawQR: null
+    };
+
+    return this.addTransaction(tx);
+  }
 }
 
 function createDefaultStorageAdapter() {
@@ -968,147 +1016,77 @@ function createDefaultStorageAdapter() {
  * 5. iOS HOME SCREEN WIDGET & INTERACTIVE DASHBOARD (Scriptable UI)
  * ============================================================================
  */
-function renderHomeWidget(records = [], budget = 15000) {
-  const widget = new ListWidget();
-  widget.setPadding(14, 16, 14, 16);
-  widget.url = URLScheme.forRunningScript();
+const THAI_WEEKDAYS_SHORT = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+const THAI_MONTHS_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-  // 1. Frosted Translucent Glass Base (โปร่งแสงให้แสง Wallpaper ลอดผ่าน)
-  const gradient = new LinearGradient();
-  gradient.locations = [0.0, 1.0];
-  gradient.colors = [
-    new Color("#1E2433", 0.65), // สโมคกี้บลูโปร่งแสง
-    new Color("#0F131D", 0.80)  // เงาดำลึกด้านล่าง
-  ];
-  widget.backgroundGradient = gradient;
+/** ชื่อหมวดหมู่ที่แสดงในหน้า Dashboard (อ้างอิงจาก categoryId เพื่อไม่กระทบข้อมูลเดิม) */
+const CATEGORY_LABELS_TH = {
+  food: "อาหาร",
+  shopping: "ช้อปปิ้ง",
+  transport: "เดินทาง",
+  bills: "บิล/ค่าใช้จ่าย",
+  entertainment: "บันเทิง",
+  general: "ทั่วไป"
+};
 
-  const now = new Date();
-  const currentYMD = now.toISOString().substring(0, 10);
-  const currentMonth = currentYMD.substring(0, 7);
+/** ชื่อธนาคารแบบสั้นภาษาไทยสำหรับแท็กในประวัติรายการ */
+const BANK_LABELS_TH = {
+  KBANK: "กสิกรไทย",
+  SCB: "ไทยพาณิชย์",
+  KTB: "กรุงไทย",
+  BBL: "กรุงเทพ",
+  TTB: "ทีทีบี",
+  BAY: "กรุงศรี",
+  GSB: "ออมสิน",
+  CIMB: "ซีไอเอ็มบี",
+  UOB: "ยูโอบี",
+  BAAC: "ธ.ก.ส.",
+  TISCO: "ทิสโก้",
+  KKP: "เกียรตินาคินภัทร",
+  LHB: "แลนด์ แอนด์ เฮ้าส์",
+  KTC: "บัตรเคทีซี",
+  CardX: "บัตรการ์ดเอ็กซ์",
+  "KBANK-CC": "บัตรกสิกรไทย",
+  "TTB-CC": "บัตรทีทีบี",
+  "BAY-CC": "บัตรกรุงศรี",
+  "CREDIT-CARD": "บัตรเครดิต",
+  MANUAL: "จดเอง",
+  UNKNOWN: "ทั่วไป"
+};
 
-  let todaySpent = 0;
-  let monthSpent = 0;
+function categoryLabelTh(categoryId, fallback = "ทั่วไป") {
+  return CATEGORY_LABELS_TH[categoryId] || fallback;
+}
 
-  // กรองรายการล่าสุด 2 รายการ
-  const sortedRecords = [...records].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const recentRecords = sortedRecords.slice(0, 2);
+function bankLabelTh(code) {
+  return BANK_LABELS_TH[code] || String(code || "ทั่วไป");
+}
 
-  records.forEach(r => {
-    const dStr = (r.date || "").substring(0, 10);
-    const amt = Number(r.amount) || 0;
-    if (dStr === currentYMD) todaySpent += amt;
-    if (dStr.startsWith(currentMonth)) monthSpent += amt;
-  });
+function localYMD(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-  const remaining = Math.max(0, budget - monthSpent);
-  const spentPercent = Math.min(Math.round((monthSpent / budget) * 100), 100);
+/** เช่น "พ. 11 พ.ย." */
+function formatThaiShortDate(d) {
+  return `${THAI_WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]}`;
+}
 
-  // 2. Main Layout (Horizontal Split)
-  const root = widget.addStack();
-  root.layoutHorizontally();
-  root.centerAlignContent();
+/** เช่น "11 พ.ย. 69 14:20 น." จากสตริง ISO (ปี ค.ศ.) */
+function formatThaiDateTime(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+  if (!m) return "-";
+  const monthIndex = parseInt(m[2], 10) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return "-";
+  const yearBE2 = String((parseInt(m[1], 10) + 543) % 100).padStart(2, "0");
+  const base = `${parseInt(m[3], 10)} ${THAI_MONTHS_SHORT[monthIndex]} ${yearBE2}`;
+  return m[4] ? `${base} ${m[4]}:${m[5]} น.` : base;
+}
 
-  // LEFT COLUMN: Overview & Dynamic Glass Progress Bar
-  const leftCol = root.addStack();
-  leftCol.layoutVertically();
-  leftCol.size = new Size(155, 0);
-
-  // App Subtitle / Date
-  const dateStr = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const subText = leftCol.addText(dateStr.toUpperCase());
-  subText.font = Font.semiboldSystemFont(9);
-  subText.textColor = new Color("#94A3B8");
-  subText.textOpacity = 0.8;
-
-  leftCol.addSpacer(2);
-
-  // Today Amount (Hero)
-  const amtStack = leftCol.addStack();
-  amtStack.bottomAlignContent();
-  const currencySign = amtStack.addText("฿");
-  currencySign.font = Font.systemFont(13);
-  currencySign.textColor = new Color("#CBD5E1");
-  amtStack.addSpacer(2);
-
-  const heroVal = amtStack.addText(
-    todaySpent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  );
-  heroVal.font = Font.boldSystemFont(22);
-  heroVal.textColor = Color.white();
-
-  leftCol.addSpacer(6);
-
-  // Minimalist Glass Progress Bar
-  const barContainer = leftCol.addStack();
-  barContainer.size = new Size(140, 4);
-  barContainer.cornerRadius = 2;
-  barContainer.backgroundColor = new Color("#FFFFFF", 0.12);
-
-  const activeBarWidth = Math.max(6, Math.round((140 * spentPercent) / 100));
-  const activeBar = barContainer.addStack();
-  activeBar.size = new Size(activeBarWidth, 4);
-  activeBar.cornerRadius = 2;
-  activeBar.backgroundColor = remaining > 1000 ? new Color("#38BDF8") : new Color("#F87171");
-
-  leftCol.addSpacer(5);
-
-  // Remaining Label
-  const remText = leftCol.addText(`LEFT ฿${Math.round(remaining).toLocaleString()} (${100 - spentPercent}%)`);
-  remText.font = Font.mediumSystemFont(8.5);
-  remText.textColor = new Color("#94A3B8");
-
-  root.addSpacer();
-
-  // RIGHT COLUMN: 2 Recent Glass Cards
-  const rightCol = root.addStack();
-  rightCol.layoutVertically();
-  rightCol.size = new Size(135, 0);
-
-  const rightTitle = rightCol.addText("RECENT ACTIVITY");
-  rightTitle.font = Font.semiboldSystemFont(8.5);
-  rightTitle.textColor = new Color("#64748B");
-
-  rightCol.addSpacer(4);
-
-  if (recentRecords.length === 0) {
-    const emptyCard = rightCol.addStack();
-    emptyCard.size = new Size(135, 52);
-    emptyCard.cornerRadius = 10;
-    emptyCard.backgroundColor = new Color("#FFFFFF", 0.05);
-    emptyCard.centerAlignContent();
-    const emptyText = emptyCard.addText("No records yet");
-    emptyText.font = Font.systemFont(9);
-    emptyText.textColor = new Color("#475569");
-  } else {
-    recentRecords.forEach((item, index) => {
-      const card = rightCol.addStack();
-      card.layoutHorizontally();
-      card.centerAlignContent();
-      card.size = new Size(135, 27);
-      card.cornerRadius = 8;
-      // Frosted Glass Effect with subtle border
-      card.backgroundColor = new Color("#FFFFFF", 0.06);
-      card.borderWidth = 0.5;
-      card.borderColor = new Color("#FFFFFF", 0.12);
-      card.setPadding(4, 8, 4, 8);
-
-      const merchText = card.addText(item.merchant || "Expense");
-      merchText.font = Font.mediumSystemFont(9.5);
-      merchText.textColor = new Color("#F1F5F9");
-      merchText.lineLimit = 1;
-
-      card.addSpacer();
-
-      const itemAmt = card.addText(`-฿${Number(item.amount).toLocaleString()}`);
-      itemAmt.font = Font.semiboldSystemFont(9.5);
-      itemAmt.textColor = new Color("#E2E8F0");
-
-      if (index === 0) rightCol.addSpacer(4);
-    });
-  }
-
-  widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
-  return widget;
+/** ยอดย่อสำหรับป้ายบนแท่งกราฟ เช่น 575, 4.4k */
+function formatCompactAmount(value) {
+  const n = Number(value) || 0;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(Math.round(n));
 }
 
 function formatMoney(value, whole = false) {
@@ -1119,74 +1097,561 @@ function formatMoney(value, whole = false) {
   });
 }
 
-async function presentInteractiveDashboard(db) {
-  const summary = db.getMonthlySummary();
-  const table = new UITable();
-  table.showSeparators = true;
+function recordDateString(r) {
+  return String((r && (r.dateOnly || r.timestamp || r.date)) || "");
+}
 
-  // Header Row
-  const headerRow = new UITableRow();
-  headerRow.isHeader = true;
-  headerRow.height = 75;
-  headerRow.backgroundColor = new Color("#0F1219");
-  const hCell = headerRow.addText(
-    `EXPENSE TRACKER  |  ฿${formatMoney(summary.totalSpent)}`,
-    `Budget ฿${formatMoney(summary.budget, true)}  |  Remaining ฿${formatMoney(summary.remaining)}  |  ${summary.transactionCount} transactions`
-  );
-  hCell.titleColor = new Color("#F8FAFC");
-  hCell.subtitleColor = new Color("#94A3B8");
-  table.addRow(headerRow);
+/** รวมยอดรายวันย้อนหลัง `days` วัน (เก่า -> ใหม่) วันสุดท้ายคือวันนี้ตามเวลาท้องถิ่น */
+function buildDailyTotals(records, days = 7, now = new Date()) {
+  const totals = {};
+  for (const r of records || []) {
+    const key = recordDateString(r).substring(0, 10);
+    totals[key] = (totals[key] || 0) + (Number(r.amount) || 0);
+  }
+  const result = [];
+  for (let offset = days - 1; offset >= 0; offset--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+    const key = localYMD(d);
+    result.push({
+      dateOnly: key,
+      day: d.getDate(),
+      isToday: offset === 0,
+      total: Number((totals[key] || 0).toFixed(2))
+    });
+  }
+  return result;
+}
 
-  // Budget settings row
-  const actionRow = new UITableRow();
-  actionRow.height = 48;
-  const actionCell = actionRow.addText("ตั้งงบประมาณรายเดือน", "แตะเพื่อแก้ไขงบประมาณ");
-  actionCell.titleColor = new Color("#38BDF8");
-  actionRow.onSelect = async () => {
-    const prompt = new Alert();
-    prompt.title = "ตั้งงบประมาณรายเดือน (บาท)";
-    prompt.addTextField("15000", String(summary.budget));
-    prompt.addAction("บันทึก");
-    prompt.addCancelAction("ยกเลิก");
-    const idx = await prompt.presentAlert();
-    if (idx === 0) {
-      db.updateBudget(prompt.textFieldValue(0));
-    }
-  };
-  table.addRow(actionRow);
+function csvEscape(value) {
+  const s = String(value === null || value === undefined ? "" : value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
-  // Recent transactions
-  for (const tx of summary.recentTransactions) {
-    const row = new UITableRow();
-    row.height = 58;
-    const left = row.addText(
-      `${tx.merchant}`,
-      `${tx.categoryName}  |  ${tx.bankName}  |  ${tx.dateOnly} ${tx.timeOnly}  |  Ref ${String(tx.refId).substring(0, 10)}`
-    );
-    left.widthWeight = 70;
+/** สร้างไฟล์ CSV (UTF-8 พร้อม BOM เพื่อให้ Excel อ่านภาษาไทยได้) */
+function buildCsv(records) {
+  const header = ["วันที่", "เวลา", "ร้านค้า", "หมวดหมู่", "ธนาคาร", "รหัสอ้างอิง", "ยอดเงิน"];
+  const rows = (records || []).map((r) => [
+    recordDateString(r).substring(0, 10),
+    r.timeOnly || recordDateString(r).substring(11, 16),
+    r.merchant || "",
+    categoryLabelTh(r.categoryId, r.categoryName),
+    bankLabelTh(r.bankCode),
+    r.refId || "",
+    Number(r.amount || 0).toFixed(2)
+  ]);
+  return "\uFEFF" + [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+}
 
-    const right = row.addText(`฿${formatMoney(tx.amount)}`);
-    right.rightAligned();
-    right.titleColor = new Color("#F87171");
-    right.widthWeight = 30;
+/** ค้นหาจากชื่อร้านค้า ธนาคาร หมวดหมู่ รหัสอ้างอิง หรือยอดเงิน */
+function filterTransactions(records, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return records;
+  return records.filter((r) => {
+    const haystack = [
+      r.merchant,
+      r.bankCode,
+      bankLabelTh(r.bankCode),
+      categoryLabelTh(r.categoryId, r.categoryName),
+      r.refId,
+      Number(r.amount || 0).toFixed(2),
+      String(Number(r.amount || 0))
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+}
 
-    table.addRow(row);
+
+function renderHomeWidget(recordsOrDb = [], budgetArg = 15000) {
+  let records = [];
+  let budget = Number(budgetArg) || 15000;
+
+  // รองรับทั้งการส่ง (records, budget) และการส่ง (db)
+  if (Array.isArray(recordsOrDb)) {
+    records = recordsOrDb;
+  } else if (recordsOrDb && typeof recordsOrDb.loadState === "function") {
+    const state = recordsOrDb.loadState();
+    records = Array.isArray(state.transactions) ? state.transactions : [];
+    budget = Number((state.settings && state.settings.monthlyBudget) || 15000);
   }
 
+  const now = new Date();
+  const daily = buildDailyTotals(records, 7, now);
+  const todaySpent = daily[daily.length - 1].total;
+  const currentMonth = localYMD(now).substring(0, 7);
+  const monthSpent = Number(
+    records
+      .filter((r) => recordDateString(r).startsWith(currentMonth))
+      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+      .toFixed(2)
+  );
+
+  const spentPercent = budget > 0 ? Math.min(100, Math.round((monthSpent / budget) * 100)) : 0;
+  const remainPercent = Math.max(0, 100 - spentPercent);
+  const isOver = budget > 0 && monthSpent > budget;
+  const isNearLimit = isOver || remainPercent <= 15;
+  const accentHex = isNearLimit ? "#FB7185" : "#38BDF8";
+
+  const widget = new ListWidget();
+  widget.setPadding(14, 16, 14, 16);
+  if (typeof URLScheme !== "undefined" && URLScheme.forRunningScript) {
+    widget.url = URLScheme.forRunningScript();
+  }
+
+  // พื้นหลังกระจกฝ้าโปร่งแสง
+  const gradient = new LinearGradient();
+  gradient.locations = [0, 1];
+  gradient.colors = [new Color("#151A24", 0.75), new Color("#0C0F15", 0.88)];
+  widget.backgroundGradient = gradient;
+
+  // ---------------- แถบหัวข้อ ----------------
+  const header = widget.addStack();
+  header.layoutHorizontally();
+  header.centerAlignContent();
+
+  const statusDot = header.addStack();
+  statusDot.size = new Size(6, 6);
+  statusDot.cornerRadius = 3;
+  statusDot.backgroundColor = new Color("#10B981");
+  header.addSpacer(5);
+
+  const appName = header.addText("บันทึกรายจ่าย");
+  appName.font = Font.semiboldSystemFont(8.5);
+  appName.textColor = new Color("#94A3B8");
+  header.addSpacer(4);
+
+  const divider = header.addText("·");
+  divider.font = Font.mediumSystemFont(8.5);
+  divider.textColor = new Color("#475569");
+  header.addSpacer(4);
+
+  const dateText = header.addText(formatThaiShortDate(now));
+  dateText.font = Font.mediumSystemFont(8.5);
+  dateText.textColor = new Color("#64748B");
+
+  header.addSpacer();
+
+  const pill = header.addStack();
+  pill.setPadding(2, 7, 2, 7);
+  pill.cornerRadius = 8;
+  pill.backgroundColor = new Color(accentHex, 0.14);
+  const pillLabel = isOver ? "เกินงบ" : isNearLimit ? "ใกล้แตะงบ" : `งบคงเหลือ ${remainPercent}%`;
+  const pillText = pill.addText(pillLabel);
+  pillText.font = Font.semiboldSystemFont(8);
+  pillText.textColor = new Color(accentHex);
+
+  widget.addSpacer(8);
+
+  // ---------------- เนื้อหา 2 คอลัมน์ ----------------
+  const body = widget.addStack();
+  body.layoutHorizontally();
+
+  // คอลัมน์ซ้าย: ยอดเด่นและหลอดงบประมาณ
+  const left = body.addStack();
+  left.layoutVertically();
+  left.size = new Size(135, 0);
+
+  const heroRow = left.addStack();
+  heroRow.layoutHorizontally();
+  heroRow.bottomAlignContent();
+  const baht = heroRow.addText("฿");
+  baht.font = Font.systemFont(14);
+  baht.textColor = new Color("#94A3B8");
+  heroRow.addSpacer(2);
+  const heroValue = heroRow.addText(formatMoney(todaySpent));
+  heroValue.font = Font.boldSystemFont(24);
+  heroValue.textColor = new Color("#FFFFFF");
+  heroValue.lineLimit = 1;
+  heroValue.minimumScaleFactor = 0.6;
+
+  const heroLabel = left.addText("ยอดใช้วันนี้");
+  heroLabel.font = Font.mediumSystemFont(8.5);
+  heroLabel.textColor = new Color("#64748B");
+
+  left.addSpacer(8);
+
+  const monthText = left.addText(`เดือนนี้ ฿${formatMoney(monthSpent, true)}`);
+  monthText.font = Font.systemFont(9);
+  monthText.textColor = new Color("#94A3B8");
+  monthText.lineLimit = 1;
+
+  left.addSpacer(4);
+
+  const track = left.addStack();
+  track.layoutHorizontally();
+  track.size = new Size(135, 3.5);
+  track.cornerRadius = 2;
+  track.backgroundColor = new Color("#FFFFFF", 0.12);
+  if (monthSpent > 0) {
+    const fill = track.addStack();
+    fill.size = new Size(Math.max(4, Math.round((135 * spentPercent) / 100)), 3.5);
+    fill.cornerRadius = 2;
+    fill.backgroundColor = new Color(isOver ? "#F87171" : "#38BDF8");
+  }
+
+  left.addSpacer();
+  body.addSpacer();
+
+  // คอลัมน์ขวา: สถิติ 7 วัน
+  const card = body.addStack();
+  card.layoutVertically();
+  card.setPadding(7, 8, 6, 8);
+  card.cornerRadius = 10;
+  card.backgroundColor = new Color("#0D111A", 0.55);
+  card.borderWidth = 0.5;
+  card.borderColor = new Color("#FFFFFF", 0.08);
+
+  const cardTitle = card.addText("สถิติ 7 วัน");
+  cardTitle.font = Font.semiboldSystemFont(7.5);
+  cardTitle.textColor = new Color("#64748B");
+
+  card.addSpacer(4);
+
+  const maxTotal = Math.max(...daily.map((d) => d.total), 0);
+  const barsRow = card.addStack();
+  barsRow.layoutHorizontally();
+  barsRow.bottomAlignContent();
+
+  daily.forEach((d, index) => {
+    const col = barsRow.addStack();
+    col.layoutVertically();
+    col.centerAlignContent();
+
+    const slot = col.addStack();
+    slot.layoutVertically();
+    slot.centerAlignContent();
+    slot.size = new Size(13, 44);
+    slot.addSpacer();
+
+    if (d.total > 0) {
+      const amountLabel = slot.addText(formatCompactAmount(d.total));
+      amountLabel.font = Font.mediumSystemFont(6.5);
+      amountLabel.textColor = new Color(d.isToday ? accentHex : "#94A3B8");
+      amountLabel.lineLimit = 1;
+      amountLabel.minimumScaleFactor = 0.6;
+      slot.addSpacer(1);
+
+      const barHeight = Math.max(5, Math.round((d.total / maxTotal) * 28));
+      const bar = slot.addStack();
+      bar.size = new Size(8, barHeight);
+      bar.cornerRadius = 4;
+      if (d.isToday) {
+        bar.backgroundColor = new Color(accentHex);
+      } else {
+        bar.backgroundColor = new Color(d.total >= maxTotal * 0.5 ? "#3B82F6" : "#334155");
+      }
+    } else {
+      const emptyBar = slot.addStack();
+      emptyBar.size = new Size(6, 4);
+      emptyBar.cornerRadius = 2;
+      emptyBar.backgroundColor = new Color("#252D3D");
+    }
+
+    col.addSpacer(3);
+
+    const dayLabel = col.addText(d.isToday ? "วันนี้" : String(d.day));
+    dayLabel.font = d.isToday ? Font.boldSystemFont(7) : Font.systemFont(7);
+    dayLabel.textColor = new Color(d.isToday ? accentHex : "#64748B");
+    dayLabel.lineLimit = 1;
+
+    if (index < daily.length - 1) barsRow.addSpacer(2);
+  });
+
+  widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  return widget;
+}
+
+
+async function runShortcutByName(name) {
+  const url = `shortcuts://run-shortcut?name=${encodeURIComponent(name)}`;
+  if (typeof Safari !== "undefined") {
+    Safari.open(url);
+  }
+}
+
+async function promptManualEntry(db) {
+  const form = new Alert();
+  form.title = "จดรายการเอง";
+  form.message = "กรอกยอดเงินและชื่อร้านค้า";
+  const amountField = form.addTextField("ยอดเงิน (บาท)", "");
+  if (amountField && typeof amountField.setDecimalPadKeyboard === "function") {
+    amountField.setDecimalPadKeyboard();
+  }
+  form.addTextField("ชื่อร้านค้า", "");
+  form.addAction("บันทึก");
+  form.addCancelAction("ยกเลิก");
+
+  const choice = await form.presentAlert();
+  if (choice !== 0) return;
+
+  const amount = parseFloat(String(form.textFieldValue(0)).replace(/,/g, ""));
+  const result = db.addManualTransaction(amount, form.textFieldValue(1));
+
+  const notice = new Alert();
+  notice.title = result.ok ? "บันทึกแล้ว" : "บันทึกไม่สำเร็จ";
+  notice.message = result.message;
+  notice.addAction("ตกลง");
+  await notice.presentAlert();
+}
+
+async function presentInteractiveDashboard(db) {
+  const table = new UITable();
+  table.showSeparators = false;
+  let query = "";
+
+  const addTapRow = (height, handler) => {
+    const row = new UITableRow();
+    row.height = height;
+    row.dismissOnSelect = false;
+    if (handler) row.onSelect = handler;
+    table.addRow(row);
+    return row;
+  };
+
+  const render = () => {
+    table.removeAllRows();
+    const state = db.loadState();
+    const allRecords = state.transactions;
+    const summary = db.getMonthlySummary();
+    const todayTotal = buildDailyTotals(allRecords, 1)[0].total;
+
+    // ---- แถบนำทาง ----
+    const nav = new UITableRow();
+    nav.height = 52;
+    nav.dismissOnSelect = false;
+    nav.backgroundColor = new Color("#0C0F15");
+
+    const closeCell = nav.addText("ปิด");
+    closeCell.titleColor = new Color("#94A3B8");
+    closeCell.titleFont = Font.mediumSystemFont(15);
+    closeCell.widthWeight = 22;
+    closeCell.leftAligned();
+    closeCell.onTap = () => Script.complete();
+
+    const titleCell = nav.addText("ภาพรวมรายจ่าย");
+    titleCell.titleColor = new Color("#F8FAFC");
+    titleCell.titleFont = Font.boldSystemFont(16);
+    titleCell.widthWeight = 56;
+    titleCell.centerAligned();
+
+    const exportCell = nav.addText("ส่งออก CSV");
+    exportCell.titleColor = new Color("#38BDF8");
+    exportCell.titleFont = Font.mediumSystemFont(13);
+    exportCell.widthWeight = 22;
+    exportCell.rightAligned();
+    exportCell.onTap = async () => {
+      if (typeof DocumentPicker !== "undefined") {
+        await DocumentPicker.exportString(buildCsv(db.loadState().transactions), "บันทึกรายจ่าย.csv");
+      }
+    };
+    table.addRow(nav);
+
+    // ---- การ์ดสรุปยอดคู่ ----
+    const totals = new UITableRow();
+    totals.height = 86;
+    totals.backgroundColor = new Color("#0C0F15");
+    const todayCell = totals.addText(`฿${formatMoney(todayTotal)}`, "ยอดใช้วันนี้");
+    todayCell.titleColor = new Color("#FB7185");
+    todayCell.titleFont = Font.boldSystemFont(24);
+    todayCell.subtitleColor = new Color("#94A3B8");
+    todayCell.subtitleFont = Font.mediumSystemFont(11);
+    todayCell.widthWeight = 50;
+    todayCell.centerAligned();
+    const monthCell = totals.addText(`฿${formatMoney(summary.totalSpent)}`, "ยอดรวมเดือนนี้");
+    monthCell.titleColor = new Color("#38BDF8");
+    monthCell.titleFont = Font.boldSystemFont(24);
+    monthCell.subtitleColor = new Color("#94A3B8");
+    monthCell.subtitleFont = Font.mediumSystemFont(11);
+    monthCell.widthWeight = 50;
+    monthCell.centerAligned();
+    table.addRow(totals);
+
+    // ---- งบประมาณ ----
+    const budgetRow = addTapRow(48, async () => {
+      const prompt = new Alert();
+      prompt.title = "ตั้งงบประมาณรายเดือน (บาท)";
+      prompt.addTextField("15000", String(summary.budget));
+      prompt.addAction("บันทึก");
+      prompt.addCancelAction("ยกเลิก");
+      if ((await prompt.presentAlert()) === 0) {
+        db.updateBudget(prompt.textFieldValue(0));
+        render();
+      }
+    });
+    budgetRow.backgroundColor = new Color("#111722");
+    const budgetCell = budgetRow.addText(
+      `งบประมาณเดือนนี้ ฿${formatMoney(summary.budget, true)}`,
+      `คงเหลือ ฿${formatMoney(summary.remaining)} · แตะเพื่อแก้ไขงบ`
+    );
+    budgetCell.titleColor = new Color("#E2E8F0");
+    budgetCell.titleFont = Font.semiboldSystemFont(13);
+    budgetCell.subtitleColor = new Color("#94A3B8");
+    budgetCell.subtitleFont = Font.systemFont(11);
+
+    // ---- ปุ่มลัด 3 รายการ ----
+    const scanRow = addTapRow(48, () => runShortcutByName("ScanSlipToApp"));
+    scanRow.backgroundColor = new Color("#064E3B");
+    const scanCell = scanRow.addText("สแกนสลิปล่าสุด", "อ่านสลิปล่าสุดในอัลบั้มรูปภาพอัตโนมัติ");
+    scanCell.titleColor = new Color("#34D399");
+    scanCell.titleFont = Font.boldSystemFont(14);
+    scanCell.subtitleColor = new Color("#A7F3D0");
+    scanCell.subtitleFont = Font.systemFont(11);
+
+    const pickRow = addTapRow(48, () => runShortcutByName("PickSlipToApp"));
+    pickRow.backgroundColor = new Color("#3B0764");
+    const pickCell = pickRow.addText("เลือกสลิปจากอัลบั้ม", "เลือกรูปสลิปเองได้หลายรายการ");
+    pickCell.titleColor = new Color("#C084FC");
+    pickCell.titleFont = Font.boldSystemFont(14);
+    pickCell.subtitleColor = new Color("#E9D5FF");
+    pickCell.subtitleFont = Font.systemFont(11);
+
+    const manualRow = addTapRow(48, async () => {
+      await promptManualEntry(db);
+      render();
+    });
+    manualRow.backgroundColor = new Color("#7C2D12");
+    const manualCell = manualRow.addText("จดรายการเอง", "กรอกยอดเงินและชื่อร้านค้าด้วยตัวเอง");
+    manualCell.titleColor = new Color("#FB923C");
+    manualCell.titleFont = Font.boldSystemFont(14);
+    manualCell.subtitleColor = new Color("#FED7AA");
+    manualCell.subtitleFont = Font.systemFont(11);
+
+    // ---- สรุปหมวดหมู่ ----
+    const catHeader = new UITableRow();
+    catHeader.isHeader = true;
+    catHeader.height = 36;
+    catHeader.backgroundColor = new Color("#0C0F15");
+    const catHeaderCell = catHeader.addText("สรุปตามหมวดหมู่เดือนนี้");
+    catHeaderCell.titleColor = new Color("#94A3B8");
+    catHeaderCell.titleFont = Font.semiboldSystemFont(12);
+    table.addRow(catHeader);
+
+    const categoryOrder = ["food", "shopping", "transport", "bills", "general"];
+    const catMap = {};
+    for (const c of summary.categories) {
+      catMap[c.id] = c;
+    }
+    for (const catId of categoryOrder) {
+      const item = catMap[catId] || { id: catId, total: 0, count: 0 };
+      const r = new UITableRow();
+      r.height = 42;
+      r.backgroundColor = new Color("#0F141E");
+      const left = r.addText(categoryLabelTh(catId), `${item.count} รายการ`);
+      left.titleColor = new Color("#E2E8F0");
+      left.titleFont = Font.mediumSystemFont(13);
+      left.subtitleColor = new Color("#64748B");
+      left.subtitleFont = Font.systemFont(10);
+      left.widthWeight = 65;
+
+      const right = r.addText(`฿${formatMoney(item.total)}`);
+      right.rightAligned();
+      right.titleColor = new Color("#CBD5E1");
+      right.titleFont = Font.semiboldSystemFont(13);
+      right.widthWeight = 35;
+      table.addRow(r);
+    }
+
+    // ---- ช่องค้นหา ----
+    const searchRow = addTapRow(48, async () => {
+      const prompt = new Alert();
+      prompt.title = "ค้นหารายการ";
+      prompt.addTextField("ค้นหารายการ, ร้านค้า, หรือยอดเงิน...", query);
+      prompt.addAction("ค้นหา");
+      prompt.addAction("ล้างคำค้น");
+      prompt.addCancelAction("ยกเลิก");
+      const idx = await prompt.presentAlert();
+      if (idx === 0) {
+        query = prompt.textFieldValue(0).trim();
+        render();
+      } else if (idx === 1) {
+        query = "";
+        render();
+      }
+    });
+    searchRow.backgroundColor = new Color("#161E2E");
+    const searchCell = searchRow.addText(
+      query ? `คำค้นหา: "${query}"` : "ค้นหารายการ, ร้านค้า, หรือยอดเงิน...",
+      query ? "แตะเพื่อเปลี่ยนหรือล้างคำค้น" : "แตะเพื่อกรองประวัติรายการด้านล่าง"
+    );
+    searchCell.titleColor = new Color(query ? "#38BDF8" : "#94A3B8");
+    searchCell.titleFont = Font.mediumSystemFont(13);
+    searchCell.subtitleColor = new Color("#64748B");
+    searchCell.subtitleFont = Font.systemFont(10);
+
+    // ---- ประวัติรายการ ----
+    const filtered = filterTransactions(allRecords, query);
+    const listHeader = new UITableRow();
+    listHeader.isHeader = true;
+    listHeader.height = 36;
+    listHeader.backgroundColor = new Color("#0C0F15");
+    const listHeaderCell = listHeader.addText(`ประวัติรายการ (${filtered.length} รายการ)`);
+    listHeaderCell.titleColor = new Color("#94A3B8");
+    listHeaderCell.titleFont = Font.semiboldSystemFont(12);
+    table.addRow(listHeader);
+
+    if (filtered.length === 0) {
+      const emptyRow = new UITableRow();
+      emptyRow.height = 56;
+      emptyRow.backgroundColor = new Color("#0F141E");
+      const emptyCell = emptyRow.addText("ไม่พบรายการที่ตรงกับเงื่อนไข");
+      emptyCell.titleColor = new Color("#64748B");
+      emptyCell.titleFont = Font.systemFont(13);
+      emptyCell.centerAligned();
+      table.addRow(emptyRow);
+    } else {
+      for (const tx of filtered.slice(0, 50)) {
+        const row = new UITableRow();
+        row.height = 62;
+        row.backgroundColor = new Color("#0F141E");
+
+        const catTh = categoryLabelTh(tx.categoryId, tx.categoryName);
+        const bankTh = bankLabelTh(tx.bankCode);
+        const dateTh = formatThaiDateTime(tx.timestamp || `${tx.dateOnly}T${tx.timeOnly || "00:00"}`);
+        const refShort = String(tx.refId || "").substring(0, 10);
+
+        const left = row.addText(
+          `${tx.merchant || "ไม่ระบุร้านค้า"}`,
+          `[${bankTh}] · ${catTh} · ${dateTh} · อ้างอิง ${refShort}`
+        );
+        left.titleColor = new Color("#F8FAFC");
+        left.titleFont = Font.semiboldSystemFont(14);
+        left.subtitleColor = new Color("#94A3B8");
+        left.subtitleFont = Font.systemFont(11);
+        left.widthWeight = 70;
+
+        const right = row.addText(`-฿${formatMoney(tx.amount)}`);
+        right.rightAligned();
+        right.titleColor = new Color("#FB7185");
+        right.titleFont = Font.boldSystemFont(14);
+        right.widthWeight = 30;
+
+        table.addRow(row);
+      }
+    }
+
+    table.reload();
+  };
+
+  render();
   await table.present(false);
 }
+
 
 /**
  * Entrypoint สำหรับเรียกจาก SlipLoader.js บน iOS
  */
 async function runSlipTracker(context = {}) {
   const db = new SlipDatabase();
-  const payload = context.inputPayload;
+  const payload = context && context.inputPayload;
 
-  // กรณีรันเป็น Home Screen Widget
+  // กรณีรันเป็น Home Screen Widget (Critical Lifecycle Fix)
   if (typeof config !== "undefined" && config.runsInWidget) {
-    const widget = await renderHomeWidget(db);
+    const records = await db.getAllRecords();
+    const budget = await db.getMonthlyBudget();
+    const widget = await renderHomeWidget(records, budget);
     Script.setWidget(widget);
+    Script.complete();
     return { ok: true, mode: "WIDGET" };
   }
 

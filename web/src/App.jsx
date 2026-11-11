@@ -84,11 +84,19 @@ const PRESETS = [
 ];
 
 const WIDGET_DEMO = {
-  today: 285,
-  month: 8420,
-  remaining: 6580,
-  bars: [420, 0, 960, 310, 1250, 640, 285],
-  labels: ["WE", "TH", "FR", "SA", "SU", "MO", "TD"]
+  dateLabel: "พ. 11 พ.ย.",
+  today: 575,
+  budget: 15000,
+  monthSpent: 5250,
+  daily: [
+    { day: "5", amount: 320, compact: "320" },
+    { day: "6", amount: 0, compact: "" },
+    { day: "7", amount: 1250, compact: "1.3k" },
+    { day: "8", amount: 480, compact: "480" },
+    { day: "9", amount: 2100, compact: "2.1k" },
+    { day: "10", amount: 525, compact: "525" },
+    { day: "วันนี้", amount: 575, compact: "575", isToday: true }
+  ]
 };
 
 const AUTOMATION_APPS = ["K PLUS", "SCB EASY", "Krungthai NEXT", "BBL", "ttb touch", "MAKE by KBank"];
@@ -206,61 +214,105 @@ function formatMoney(n, whole = false) {
   });
 }
 
-/* iOS widget mock matching renderHomeWidget in SlipCore.js */
+/* iOS widget mock mirroring renderHomeWidget in SlipCore.js (100% Thai FinTech Liquid Glass) */
 function WidgetPreview() {
-  const max = Math.max(...WIDGET_DEMO.bars);
-  const low = WIDGET_DEMO.remaining / 15000 <= 0.15;
-  const accent = low ? "#F87171" : "#38BDF8";
+  const { today, budget, monthSpent, daily, dateLabel } = WIDGET_DEMO;
+  const spentPercent = Math.min(Math.round((monthSpent / budget) * 100), 100);
+  const remainPercent = Math.max(0, 100 - spentPercent);
+  const maxDaily = Math.max(...daily.map((d) => d.amount), 1);
+
   return (
     <div
-      className="flex w-full max-w-[360px] gap-3 rounded-[28px] p-4 shadow-2xl shadow-black/60 ring-1 ring-white/10"
-      style={{
-        background: "linear-gradient(145deg, rgba(30,35,48,0.95), rgba(20,23,32,0.97) 55%, rgba(13,15,20,0.98))"
-      }}
+      className="w-full max-w-[360px] rounded-[28px] px-4 py-3.5 shadow-2xl shadow-black/70 ring-1 ring-white/10"
+      style={{ background: "linear-gradient(165deg, rgba(21,26,36,0.82), rgba(12,15,21,0.92))" }}
     >
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-[9px] font-semibold tracking-wider text-[#64748B]">EXPENSE TRACKER</span>
-        <div className="mt-1.5 flex items-end gap-0.5">
-          <span className="pb-0.5 text-sm font-medium text-[#94A3B8]">฿</span>
-          <span className="text-[22px] font-bold leading-none text-[#F8FAFC]">{formatMoney(WIDGET_DEMO.today)}</span>
+      {/* Header Strip */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+          <span className="font-semibold text-[#94A3B8]">บันทึกรายจ่าย</span>
+          <span className="text-[#475569]">·</span>
+          <span className="font-medium text-[#64748B]">{dateLabel}</span>
         </div>
-        <span className="mt-0.5 text-[8px] font-semibold tracking-wider text-[#475569]">TODAY'S SPENT</span>
-        <div className="mt-2 flex items-baseline gap-1.5">
-          <span className="text-[8px] font-semibold tracking-wider text-[#475569]">MONTH</span>
-          <span className="text-xs font-semibold text-[#CBD5E1]">฿{formatMoney(WIDGET_DEMO.month)}</span>
-        </div>
-        <div
-          className="mt-auto flex items-center gap-1.5 self-start rounded-full px-2.5 py-1.5"
-          style={{ background: "rgba(30,41,59,0.5)" }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
-          <span className="text-[8px] font-semibold tracking-wider text-[#64748B]">REMAINING</span>
-          <span className="text-[11px] font-bold" style={{ color: accent }}>
-            ฿{formatMoney(WIDGET_DEMO.remaining, true)}
-          </span>
-        </div>
+        <span className="rounded-md bg-[#38BDF8]/15 px-2 py-0.5 text-[9.5px] font-semibold text-[#38BDF8]">
+          งบคงเหลือ {remainPercent}%
+        </span>
       </div>
-      <div className="rounded-[10px] px-3 pt-2.5 pb-2" style={{ background: "rgba(16,19,27,0.6)" }}>
-        <span className="text-[8px] font-semibold tracking-wider text-[#64748B]">7-DAY VELOCITY</span>
-        <div className="mt-2 flex items-end gap-1">
-          {WIDGET_DEMO.bars.map((v, i) => {
-            const isToday = i === WIDGET_DEMO.bars.length - 1;
-            const h = v > 0 ? Math.max(4, Math.round((v / max) * 56)) : 4;
-            const color = isToday ? "#38BDF8" : v > 0 ? "#334155" : "#1E2430";
-            return (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <div className="flex h-14 w-3.5 items-end justify-center">
-                  <div className="w-2.5 rounded-[3px]" style={{ height: h, background: color }} />
+
+      {/* 2-Column Body */}
+      <div className="mt-2.5 flex items-stretch justify-between gap-3">
+        {/* Left Column: Hero Today & Monthly Progress */}
+        <div className="flex w-[140px] flex-col justify-between">
+          <div>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-[14px] text-[#94A3B8]">฿</span>
+              <span className="text-[24px] font-bold leading-none text-white">{formatMoney(today)}</span>
+            </div>
+            <span className="mt-1 block text-[10px] font-medium text-[#64748B]">ยอดใช้วันนี้</span>
+          </div>
+
+          <div className="mt-3">
+            <span className="block text-[10.5px] text-[#94A3B8]">
+              เดือนนี้ ฿{formatMoney(monthSpent, true)}
+            </span>
+            <div className="mt-1.5 h-[4px] w-[135px] rounded-full bg-white/15">
+              <div
+                className="h-[4px] rounded-full bg-[#38BDF8]"
+                style={{ width: `${Math.max(6, Math.round((135 * spentPercent) / 100))}px` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: 7-Day Velocity Bar Chart (Thai) */}
+        <div
+          className="flex-1 rounded-[10px] border border-white/[0.08] px-2.5 pt-2 pb-1.5"
+          style={{ background: "rgba(13,17,26,0.65)" }}
+        >
+          <span className="block text-[9px] font-semibold text-[#64748B]">สถิติ 7 วัน</span>
+          <div className="mt-1.5 flex items-end justify-between gap-1">
+            {daily.map((d) => {
+              const barH = d.amount > 0 ? Math.max(6, Math.round((d.amount / maxDaily) * 30)) : 4;
+              const barColor = d.isToday
+                ? "#38BDF8"
+                : d.amount >= maxDaily * 0.5
+                ? "#3B82F6"
+                : d.amount > 0
+                ? "#334155"
+                : "#252D3D";
+              return (
+                <div key={d.day} className="flex flex-col items-center">
+                  <div className="flex h-[44px] flex-col items-center justify-end">
+                    {d.amount > 0 && (
+                      <span
+                        className="mb-0.5 text-[7.5px] font-medium leading-none"
+                        style={{ color: d.isToday ? "#38BDF8" : "#94A3B8" }}
+                      >
+                        {d.compact}
+                      </span>
+                    )}
+                    <div
+                      className="rounded-full"
+                      style={{
+                        width: d.amount > 0 ? "8px" : "6px",
+                        height: `${barH}px`,
+                        background: barColor
+                      }}
+                    />
+                  </div>
+                  <span
+                    className="mt-1 text-[8px]"
+                    style={{
+                      fontWeight: d.isToday ? 700 : 500,
+                      color: d.isToday ? "#38BDF8" : "#64748B"
+                    }}
+                  >
+                    {d.day}
+                  </span>
                 </div>
-                <span
-                  className="text-[7px] font-semibold"
-                  style={{ color: isToday ? "#38BDF8" : "#64748B" }}
-                >
-                  {WIDGET_DEMO.labels[i]}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

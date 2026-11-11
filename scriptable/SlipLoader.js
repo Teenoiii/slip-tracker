@@ -13,8 +13,8 @@
  * ============================================================================
  */
 
-const GITHUB_RAW_URL =
-  "https://raw.githubusercontent.com/sliptracker-os/slip-tracker/main/scriptable/SlipCore.js";
+const GITHUB_RAW_URL = 
+  "https://raw.githubusercontent.com/Teenoiii/slip-tracker/main/scriptable/SlipCore.js";
 const CACHE_FOLDER = "SlipTracker";
 const CACHE_FILE = "SlipCore.cache.js";
 const META_FILE = "SlipLoader.meta.json";
